@@ -1,0 +1,53 @@
+model:
+  base_model: "Rostlab/prot_t5_xl_uniref50"
+  max_length: 512                   # ProtT5 processes space-separated AAs
+  pooling: "mean"
+  encoder_only: true                # only fine-tune the encoder stack
+
+lora:
+  r: 8
+  lora_alpha: 16
+  target_modules: ["q", "k", "v", "o", "wi_0", "wi_1", "wo"]
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "FEATURE_EXTRACTION"
+
+qlora:
+  enabled: false                    # set true to use 4-bit quantization
+  load_in_4bit: true
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_compute_dtype: "bfloat16"
+  bnb_4bit_use_double_quant: true
+
+training:
+  output_dir: "./outputs/prott5_lora"
+  num_epochs: 8
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.06
+  lr_scheduler: "cosine"
+  bf16: true
+  max_grad_norm: 1.0
+  eval_steps: 500
+  save_steps: 500
+  logging_steps: 100
+  dataloader_num_workers: 4
+  seed: 42
+
+classifier:
+  hidden_dims: [1024, 512]
+  dropout: 0.3
+  loss: "binary_cross_entropy_with_logits"
+  pos_weight_scale: 1.0
+
+ontologies:
+  - "BPO"
+  - "MFO"
+  - "CCO"
+
+thresholds:
+  BPO: 0.3
+  MFO: 0.35
+  CCO: 0.4

@@ -1,0 +1,45 @@
+model:
+  base_model: "facebook/esm2_t33_650M_UR50D"   # 650M param; use esm2_t6_8M_UR50D for Kaggle free tier
+  max_length: 1024
+  pooling: "mean"                                 # mean pooling over residue embeddings
+
+lora:
+  r: 16
+  lora_alpha: 32
+  target_modules: ["query", "key", "value", "dense"]
+  lora_dropout: 0.1
+  bias: "none"
+  task_type: "FEATURE_EXTRACTION"
+
+training:
+  output_dir: "./outputs/esm2_lora"
+  num_epochs: 10
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  lr_scheduler: "cosine"
+  fp16: true
+  max_grad_norm: 1.0
+  eval_steps: 500
+  save_steps: 500
+  logging_steps: 100
+  dataloader_num_workers: 4
+  seed: 42
+
+classifier:
+  hidden_dims: [512, 256]
+  dropout: 0.3
+  loss: "binary_cross_entropy_with_logits"
+  pos_weight_scale: 1.0            # scale factor for pos_weight in BCE
+
+ontologies:
+  - "BPO"   # Biological Process
+  - "MFO"   # Molecular Function
+  - "CCO"   # Cellular Component
+
+thresholds:
+  BPO: 0.3
+  MFO: 0.35
+  CCO: 0.4

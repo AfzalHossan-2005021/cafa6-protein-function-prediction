@@ -1,0 +1,50 @@
+# Core ML
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.40.0
+peft>=0.10.0
+accelerate>=0.28.0
+bitsandbytes>=0.43.0
+datasets>=2.18.0
+tokenizers>=0.15.0
+
+# Protein language models
+fair-esm>=2.0.0
+sentencepiece>=0.1.99
+
+# Scientific computing
+numpy>=1.26.0
+scipy>=1.12.0
+scikit-learn>=1.4.0
+pandas>=2.2.0
+
+# Ontology
+obonet>=1.1.0
+networkx>=3.2.0
+goatools>=1.4.3
+
+# Gradient boosting baseline
+xgboost>=2.0.0
+lightgbm>=4.3.0
+
+# Experiment tracking
+wandb>=0.16.0
+
+# Hugging Face Hub
+huggingface_hub>=0.22.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# App
+gradio>=4.26.0
+
+# Notebooks
+jupyter>=1.0.0
+ipywidgets>=8.1.0
+
+# Utilities
+tqdm>=4.66.0
+PyYAML>=6.0.1
+einops>=0.7.0
