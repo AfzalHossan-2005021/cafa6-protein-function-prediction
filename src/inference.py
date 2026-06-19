@@ -18,7 +18,16 @@ import argparse
 import logging
 import os
 import pickle
+import ssl
 from pathlib import Path
+
+try:
+    import certifi
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+    ssl._create_default_https_context = ssl.create_default_context
+except Exception:
+    pass
 
 import numpy as np
 import torch
@@ -72,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--checkpoint", required=True, help="Path to saved checkpoint directory")
     p.add_argument("--fasta", required=True, help="Input FASTA file with protein sequences")
     p.add_argument("--go_terms", default=None, help="Path to go_terms list (.pkl or .txt)")
-    p.add_argument("--obo", default=None, help="Path to go.obo for propagation")
+    p.add_argument("--obo", default="data/raw/Train/go-basic.obo", help="Path to go-basic.obo for propagation")
     p.add_argument("--output", default="predictions/submission.tsv", help="Output TSV file")
     p.add_argument("--threshold", type=float, default=0.3)
     p.add_argument("--propagate", action="store_true", help="Apply GO hierarchy propagation")

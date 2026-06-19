@@ -161,17 +161,42 @@ class ProtT5Classifier(nn.Module):
             result["loss"] = loss_fct(logits, labels)
         return result
 
+    _CONFIG_FIELDS = [
+        "base_model_name", "num_labels", "hidden_dims", "dropout", "pooling",
+        "lora_r", "lora_alpha", "lora_dropout", "lora_target_modules", "use_qlora", "go_terms",
+    ]
+
     def save_pretrained(self, save_dir: str) -> None:
         """Save LoRA adapters + head + config."""
+        import json
         os.makedirs(save_dir, exist_ok=True)
         self.encoder.save_pretrained(save_dir)
         torch.save(self.head.state_dict(), os.path.join(save_dir, "classification_head.pt"))
-        self.config.save_pretrained(save_dir)
+        cfg_dict = {k: getattr(self.config, k) for k in self._CONFIG_FIELDS}
+        cfg_dict["model_class"] = "ProtT5Classifier"
+        with open(os.path.join(save_dir, "classifier_config.json"), "w") as fh:
+            json.dump(cfg_dict, fh, indent=2)
         logger.info(f"ProtT5Classifier saved → {save_dir}")
 
     @classmethod
     def from_pretrained(cls, load_dir: str) -> "ProtT5Classifier":
-        config = ProtT5ClassifierConfig.from_pretrained(load_dir)
+        import json
+        cfg_path = os.path.join(load_dir, "classifier_config.json")
+        with open(cfg_path) as fh:
+            cfg_dict = json.load(fh)
+        config = ProtT5ClassifierConfig(
+            base_model_name=cfg_dict["base_model_name"],
+            num_labels=cfg_dict["num_labels"],
+            hidden_dims=cfg_dict["hidden_dims"],
+            dropout=cfg_dict["dropout"],
+            pooling=cfg_dict["pooling"],
+            lora_r=cfg_dict["lora_r"],
+            lora_alpha=cfg_dict["lora_alpha"],
+            lora_dropout=cfg_dict["lora_dropout"],
+            lora_target_modules=cfg_dict["lora_target_modules"],
+            use_qlora=cfg_dict.get("use_qlora", False),
+            go_terms=cfg_dict.get("go_terms", []),
+        )
         model = cls.__new__(cls)
         super(ProtT5Classifier, model).__init__()
         model.config = config
@@ -185,7 +210,7 @@ class ProtT5Classifier(nn.Module):
             dropout=config.dropout,
         )
         head_path = os.path.join(load_dir, "classification_head.pt")
-        model.head.load_state_dict(torch.load(head_path, map_location="cpu"))
+        model.head.load_state_dict(torch.load(head_path, map_location="cpu", weights_only=True))
         logger.info(f"ProtT5Classifier loaded from {load_dir}")
         return model
 

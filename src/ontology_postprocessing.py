@@ -206,18 +206,17 @@ def format_cafa_submission(
     go_terms: list[str],
     scores: np.ndarray,
     threshold: float = 0.01,
-    model_name: str = "ESM2_LoRA",
 ) -> str:
     """
-    Format predictions in CAFA submission format.
+    Format predictions in the CAFA6 Kaggle submission format.
 
-    Output columns: protein_id  go_term  score
+    Matches sample_submission.tsv: protein_id  go_term  score  (tab-separated, no header)
+    Only rows with score >= threshold are emitted.
     """
-    lines = [f"AUTHOR {model_name}", "MODEL 1", "KEYWORDS deep learning, protein language model."]
+    lines: list[str] = []
     for i, pid in enumerate(protein_ids):
         for j, term in enumerate(go_terms):
             s = float(scores[i, j])
             if s >= threshold:
                 lines.append(f"{pid}\t{term}\t{s:.3f}")
-    lines.append("END")
     return "\n".join(lines)

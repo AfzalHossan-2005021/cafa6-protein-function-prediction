@@ -23,19 +23,36 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
-ONTOLOGY_MAP = {
-    "GO:0008150": "BPO",  # biological_process
-    "GO:0003674": "MFO",  # molecular_function
-    "GO:0005575": "CCO",  # cellular_component
-}
+
+# CAFA6 train_terms.tsv aspect codes → ontology name
+ASPECT_MAP = {"C": "CCO", "F": "MFO", "P": "BPO"}
 
 
 # ---------------------------------------------------------------------------
 # FASTA parsing
 # ---------------------------------------------------------------------------
 
+def _extract_uniprot_accession(header_token: str) -> str:
+    """
+    Extract accession from UniProt-style FASTA header token.
+
+    Handles both formats:
+      - "sp|A0A0C5B5G6|MOTSC_HUMAN"  →  "A0A0C5B5G6"
+      - "A0A0C5B5G6"                 →  "A0A0C5B5G6"
+    """
+    if "|" in header_token:
+        parts = header_token.split("|")
+        # UniProt format: db|accession|entry_name
+        return parts[1] if len(parts) >= 2 else header_token
+    return header_token
+
+
 def parse_fasta(fasta_path: str | Path) -> dict[str, str]:
-    """Return {protein_id: sequence} from a FASTA file."""
+    """Return {protein_id: sequence} from a FASTA file.
+
+    Handles both UniProt-format train headers (sp|ACC|NAME ...) and
+    plain CAFA test headers (ACC TAXON).
+    """
     sequences: dict[str, str] = {}
     current_id: str | None = None
     current_seq: list[str] = []
@@ -48,8 +65,8 @@ def parse_fasta(fasta_path: str | Path) -> dict[str, str]:
             if line.startswith(">"):
                 if current_id is not None:
                     sequences[current_id] = "".join(current_seq)
-                # CAFA IDs are the first token after ">"
-                current_id = line[1:].split()[0]
+                first_token = line[1:].split()[0]
+                current_id = _extract_uniprot_accession(first_token)
                 current_seq = []
             else:
                 current_seq.append(line.upper())
@@ -65,34 +82,35 @@ def parse_fasta(fasta_path: str | Path) -> dict[str, str]:
 # GO annotation loading
 # ---------------------------------------------------------------------------
 
-def parse_go_annotations(
-    annotation_path: str | Path,
-    evidence_codes: list[str] | None = None,
-) -> pd.DataFrame:
+def parse_go_annotations(annotation_path: str | Path) -> pd.DataFrame:
     """
-    Parse a GAF or TSV annotation file.
+    Parse the CAFA6 train_terms.tsv annotation file.
 
-    Expected TSV columns (CAFA format):
-        protein_id  go_term  ontology  evidence_code
+    Actual CAFA6 columns: EntryID  term  aspect
+    where aspect is 'C' (CCO), 'F' (MFO), 'P' (BPO).
 
     Returns a DataFrame with columns [protein_id, go_term, ontology].
     """
-    df = pd.read_csv(
-        annotation_path,
-        sep="\t",
-        comment="!",
-        header=None,
-        names=["protein_id", "go_term", "ontology", "evidence_code"],
-        usecols=[0, 1, 2, 3],
-        dtype=str,
-    )
+    df = pd.read_csv(annotation_path, sep="\t", dtype=str)
 
+    # Normalise column names (case-insensitive)
+    df.columns = [c.strip() for c in df.columns]
+    col_map = {c.lower(): c for c in df.columns}
+
+    entry_col = col_map.get("entryid", col_map.get("protein_id", df.columns[0]))
+    term_col  = col_map.get("term", col_map.get("go_term", df.columns[1]))
+    asp_col   = col_map.get("aspect", col_map.get("ontology", df.columns[2]))
+
+    df = df[[entry_col, term_col, asp_col]].copy()
+    df.columns = ["protein_id", "go_term", "aspect"]
     df = df.dropna(subset=["protein_id", "go_term"])
     df["protein_id"] = df["protein_id"].str.strip()
     df["go_term"] = df["go_term"].str.strip()
+    df["aspect"] = df["aspect"].str.strip()
 
-    if evidence_codes is not None:
-        df = df[df["evidence_code"].isin(evidence_codes)]
+    # Map C/F/P → CCO/MFO/BPO; drop any rows with unknown aspect
+    df["ontology"] = df["aspect"].map(ASPECT_MAP)
+    df = df.dropna(subset=["ontology"])
 
     logger.info(f"Loaded {len(df):,} annotations covering {df['protein_id'].nunique():,} proteins")
     return df[["protein_id", "go_term", "ontology"]]

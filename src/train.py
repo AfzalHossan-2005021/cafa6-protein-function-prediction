@@ -15,7 +15,17 @@ import argparse
 import logging
 import os
 import pickle
+import ssl
 from pathlib import Path
+
+# Fix broken SSL_CERT_FILE conda env variable (common on Windows)
+try:
+    import certifi
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+    ssl._create_default_https_context = ssl.create_default_context
+except Exception:
+    pass
 
 import numpy as np
 import torch
@@ -167,6 +177,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data_path", required=True, help="Path to preprocessed .pkl split file")
     parser.add_argument("--ontology", default="BPO", help="Ontology name (BPO / MFO / CCO)")
     parser.add_argument("--output_dir", default=None, help="Override output directory from config")
+    # CLI overrides for quick experimentation
+    parser.add_argument("--num_epochs", type=int, default=None, help="Override num_epochs from config")
+    parser.add_argument("--batch_size", type=int, default=None, help="Override batch_size from config")
+    parser.add_argument("--base_model", default=None,
+                        help="Override base model (e.g. facebook/esm2_t6_8M_UR50D for fast testing)")
+    parser.add_argument("--max_train_samples", type=int, default=None,
+                        help="Limit train split to N samples (for smoke-testing)")
     parser.add_argument("--wandb_project", default=None)
     parser.add_argument("--hub_repo", default=None, help="HuggingFace repo ID to push to after training")
     parser.add_argument("--hub_token", default=None, help="HuggingFace API token")
@@ -179,6 +196,22 @@ def main():
     args = parse_args()
     cfg = load_config(args.config)
     data = load_split(args.data_path)
+
+    # Apply CLI overrides
+    if args.num_epochs is not None:
+        cfg["training"]["num_epochs"] = args.num_epochs
+    if args.batch_size is not None:
+        cfg["training"]["batch_size"] = args.batch_size
+    if args.base_model is not None:
+        cfg["model"]["base_model"] = args.base_model
+
+    # Optionally limit training data for smoke-testing
+    if args.max_train_samples is not None:
+        n = args.max_train_samples
+        data["train"]["protein_ids"] = data["train"]["protein_ids"][:n]
+        data["train"]["sequences"]   = data["train"]["sequences"][:n]
+        data["train"]["labels"]      = data["train"]["labels"][:n]
+        logger.info(f"Limiting train set to {n} samples (smoke-test mode)")
 
     output_dir = args.output_dir or cfg["training"]["output_dir"]
     Path(output_dir).mkdir(parents=True, exist_ok=True)

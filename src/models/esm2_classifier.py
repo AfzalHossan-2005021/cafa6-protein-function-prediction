@@ -151,23 +151,47 @@ class ESM2Classifier(nn.Module):
             result["loss"] = loss_fct(logits, labels)
         return result
 
+    # Fields persisted in classifier_config.json
+    _CONFIG_FIELDS = [
+        "base_model_name", "num_labels", "hidden_dims", "dropout", "pooling",
+        "lora_r", "lora_alpha", "lora_dropout", "lora_target_modules", "go_terms",
+    ]
+
     def save_pretrained(self, save_dir: str) -> None:
         """Save LoRA adapters + head + config for HuggingFace Hub upload."""
+        import json
         os.makedirs(save_dir, exist_ok=True)
         self.encoder.save_pretrained(save_dir)
         torch.save(self.head.state_dict(), os.path.join(save_dir, "classification_head.pt"))
-        self.config.save_pretrained(save_dir)
+        cfg_dict = {k: getattr(self.config, k) for k in self._CONFIG_FIELDS}
+        cfg_dict["model_class"] = "ESM2Classifier"
+        with open(os.path.join(save_dir, "classifier_config.json"), "w") as fh:
+            json.dump(cfg_dict, fh, indent=2)
         logger.info(f"ESM2Classifier saved → {save_dir}")
 
     @classmethod
     def from_pretrained(cls, load_dir: str) -> "ESM2Classifier":
-        config = ESM2ClassifierConfig.from_pretrained(load_dir)
+        import json
+        cfg_path = os.path.join(load_dir, "classifier_config.json")
+        with open(cfg_path) as fh:
+            cfg_dict = json.load(fh)
+        config = ESM2ClassifierConfig(
+            base_model_name=cfg_dict["base_model_name"],
+            num_labels=cfg_dict["num_labels"],
+            hidden_dims=cfg_dict["hidden_dims"],
+            dropout=cfg_dict["dropout"],
+            pooling=cfg_dict["pooling"],
+            lora_r=cfg_dict["lora_r"],
+            lora_alpha=cfg_dict["lora_alpha"],
+            lora_dropout=cfg_dict["lora_dropout"],
+            lora_target_modules=cfg_dict["lora_target_modules"],
+            go_terms=cfg_dict.get("go_terms", []),
+        )
         model = cls(config)
-        # Replace the PEFT model with the saved one
         backbone = AutoModel.from_pretrained(config.base_model_name)
         model.encoder = PeftModel.from_pretrained(backbone, load_dir)
         head_path = os.path.join(load_dir, "classification_head.pt")
-        model.head.load_state_dict(torch.load(head_path, map_location="cpu"))
+        model.head.load_state_dict(torch.load(head_path, map_location="cpu", weights_only=True))
         logger.info(f"ESM2Classifier loaded from {load_dir}")
         return model
 

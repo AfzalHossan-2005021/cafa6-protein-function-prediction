@@ -14,8 +14,29 @@ References:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
-from sklearn.metrics import average_precision_score, precision_recall_curve
+import pandas as pd
+from sklearn.metrics import average_precision_score
+
+
+# ---------------------------------------------------------------------------
+# IA (Information Accretion) loading — CAFA6 provides data/raw/IA.tsv
+# ---------------------------------------------------------------------------
+
+def load_ia_weights(ia_path: str | Path, go_terms: list[str]) -> np.ndarray:
+    """
+    Load information accretion weights from the CAFA6 IA.tsv file.
+
+    IA.tsv columns: go_term  ia_value (no header)
+
+    Returns a (n_terms,) float32 array aligned to go_terms.
+    Missing terms get IA = 0.
+    """
+    df = pd.read_csv(ia_path, sep="\t", header=None, names=["go_term", "ia"], dtype={"go_term": str, "ia": float})
+    ia_map = dict(zip(df["go_term"], df["ia"]))
+    return np.array([ia_map.get(t, 0.0) for t in go_terms], dtype=np.float32)
 
 
 # ---------------------------------------------------------------------------
